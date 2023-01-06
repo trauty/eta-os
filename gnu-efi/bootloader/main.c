@@ -29,6 +29,15 @@ typedef struct
 	void* glyph_buffer;
 }PSF1_FONT;
 
+typedef struct
+{
+	Framebuffer* framebuffer;
+	PSF1_FONT* psf1_font;
+	EFI_MEMORY_DESCRIPTOR* mem_map;
+	UINTN mem_map_size;
+	UINTN mem_map_descriptor_size;
+}BOOT_INFO;
+
 Framebuffer framebuffer;
 
 Framebuffer* init_gop()
@@ -211,8 +220,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table)
 
 	Print(L"Eta-OS kernel loaded. \n\r");
 
-	void (*kernel_start)(Framebuffer*, PSF1_FONT*) = ((__attribute__((sysv_abi)) void (*)(Framebuffer*, PSF1_FONT*)) header.e_entry); // function pointer for kernel entry, //__attribute__ defines call conventions for compiler
-
 	PSF1_FONT* new_font = load_psf1_font(NULL, L"zap-light16.psf", image_handle, system_table);
 
 	if (new_font == NULL)
@@ -224,16 +231,38 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table)
 		Print(L"Font found, char size = %d.\r\n", new_font->psf1_header->charsize);
 	}
 
-	Framebuffer* new_buffer = init_gop(); // inits framebuffer
+	Framebuffer* new_framebuffer = init_gop(); // initializes framebuffer
 
 	Print(L"Base: 0x%x\r\nSize: 0x%x\r\nWidth: %d\r\nHeight: %d\r\nPixels per scanline: %d\r\n",
-		new_buffer->base_adress,
-		new_buffer->buffer_size,
-		new_buffer->width,
-		new_buffer->height,
-		new_buffer->pixels_per_scanline);
+		new_framebuffer->base_adress,
+		new_framebuffer->buffer_size,
+		new_framebuffer->width,
+		new_framebuffer->height,
+		new_framebuffer->pixels_per_scanline);
 
-	kernel_start(new_buffer, new_font); // calls entry function of kernel and passes pointer to framebuffer
+	EFI_MEMORY_DESCRIPTOR* map = NULL;
+	UINTN map_size, map_key;
+	UINTN descriptor_size;
+	UINT32 descriptor_version;
+	{
+		system_table->BootServices->GetMemoryMap(&map_size, map, &map_key, &descriptor_size, &descriptor_version);
+		system_table->BootServices->AllocatePool(EfiLoaderData, map_size, (void**)&map);
+		system_table->BootServices->GetMemoryMap(&map_size, map, &map_key, &descriptor_size, &descriptor_version);
+	}
+
+	// function pointer for kernel entry, //__attribute__ defines call conventions for compiler
+	void (*kernel_start)(BOOT_INFO*) = ((__attribute__((sysv_abi)) void (*)(BOOT_INFO*)) header.e_entry);
+
+	BOOT_INFO boot_info;
+	boot_info.framebuffer = new_framebuffer;
+	boot_info.psf1_font = new_font;
+	boot_info.mem_map = map;
+	boot_info.mem_map_size = map_size;
+	boot_info.mem_map_descriptor_size = descriptor_size;
+
+	system_table->BootServices->ExitBootServices(image_handle, map_key);
+
+	kernel_start(&boot_info); // calls entry function of kernel and passes pointer to framebuffer
 
 	return EFI_SUCCESS; // exit the UEFI application
 }
