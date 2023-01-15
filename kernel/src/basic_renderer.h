@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #include "math_util.h"
 #include "framebuffer.h"
 #include "simple_font.h"
@@ -21,4 +23,8 @@ public:
     unsigned int color;
     void print(const char* str);
     void draw_char(char chr, unsigned int xOff, unsigned yOff);
+    void clear(uint32_t color);
+    void nextln();
 };
+
+extern BasicRenderer* global_renderer;
