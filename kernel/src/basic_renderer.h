@@ -21,9 +21,12 @@ public:
     Framebuffer* target_framebuffer;
     PSF1_FONT* psf1_font;
     unsigned int color;
+    unsigned int clear_color;
     void print(const char* str);
     void draw_char(char chr, unsigned int xOff, unsigned yOff);
-    void clear(uint32_t color);
+    void draw_char(char chr);
+    void clear();
+    void clear_char();
     void nextln();
 };
 

@@ -21,6 +21,19 @@ void BasicRenderer::draw_char(char chr, unsigned int xOff, unsigned yOff)
     }
 }
 
+void BasicRenderer::draw_char(char chr)
+{
+    draw_char(chr, cursor_position.x, cursor_position.y);
+    
+    cursor_position.x += 8;
+
+    if (cursor_position.x + 8 > target_framebuffer->width)
+    {
+        cursor_position.x = 0;
+        cursor_position.y += 16;
+    }
+}
+
 void BasicRenderer::print(const char* str)
 {
     char* chr = (char*)str;
@@ -40,7 +53,7 @@ void BasicRenderer::print(const char* str)
     }
 }
 
-void BasicRenderer::clear(uint32_t color)
+void BasicRenderer::clear()
 {
     uint64_t frame_buf_base = (uint64_t)target_framebuffer->base_adress;
     uint64_t bytes_per_scanline = target_framebuffer->pixels_per_scanline * 4; // each pixel 4 bytes
@@ -52,7 +65,47 @@ void BasicRenderer::clear(uint32_t color)
         uint64_t pix_ptr_base = frame_buf_base + (bytes_per_scanline * vert_scan_line);
         for (uint32_t* pix_ptr = (uint32_t*)pix_ptr_base; pix_ptr < (uint32_t*)(pix_ptr_base + bytes_per_scanline); pix_ptr++)
         {
-            *pix_ptr = color;
+            *pix_ptr = clear_color;
+        }
+    }
+}
+
+void BasicRenderer::clear_char()
+{
+    if (cursor_position.x == 0)
+    {
+        cursor_position.x = target_framebuffer->width;
+        cursor_position.y -= 16;
+
+        if (cursor_position.y < 0)
+        {
+            cursor_position.y = 0;
+        }
+    }
+
+    unsigned int x_off = cursor_position.x;
+    unsigned int y_off = cursor_position.y;
+
+    unsigned int* pixel_ptr = (unsigned int*)target_framebuffer->base_adress;
+
+    for (unsigned long y = y_off; y < y_off + 16; y++)
+    {
+        for (unsigned long x = x_off - 8; x < x_off; x++)
+        {
+            *(unsigned int*)(pixel_ptr + x + (y * target_framebuffer->pixels_per_scanline)) = clear_color;
+        }
+    }
+
+    cursor_position.x -= 8;
+
+    if (cursor_position.x < 0)
+    {
+        cursor_position.x = target_framebuffer->width;
+        cursor_position.y -= 16;
+
+        if (cursor_position.y < 0)
+        {
+            cursor_position.y = 0;
         }
     }
 }

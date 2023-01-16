@@ -7,7 +7,8 @@ void panic(const char* msg)
     uint16_t msg_size;
     while (msg[msg_size] != '\0') { msg_size++; } msg_size++;
 
-    global_renderer->clear(0x0000ff00);
+    global_renderer->clear_color = 0x0000ff00;
+    global_renderer->clear();
 
     global_renderer->cursor_position = { global_renderer->target_framebuffer->width / 2 - 52, global_renderer->target_framebuffer->height / 2 - 16 };
 

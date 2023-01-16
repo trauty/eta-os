@@ -1,6 +1,7 @@
 #include "interrupts.h"
 #include "../panic_screen.h"
 #include "../io.h"
+#include "../input/keyboard.h"
 
 __attribute__((interrupt)) void page_fault_handler(struct InterruptFrame* frame)
 {
@@ -25,9 +26,10 @@ __attribute__((interrupt)) void gp_fault_handler(struct InterruptFrame* frame)
 
 __attribute__((interrupt)) void keyboard_int_handler(struct InterruptFrame* frame)
 {
-    global_renderer->print("PRESSED");
-
     uint8_t scancode = inb(0x60);
+
+    handle_keyboard(scancode);
+
     pic_end_master();
 }
 

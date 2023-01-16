@@ -38,7 +38,7 @@ void PageFrameAllocator::read_efi_memory_map(EFI_MEMORY_DESCRIPTOR* mem_map, siz
 
     init_bitmap(bitmap_size, largest_free_mem_seg);
 
-    lock_pages(&page_bitmap, page_bitmap.size / 4096 + 1); // lock bitmap pages to avoid corruption
+    lock_pages(page_bitmap.buffer, page_bitmap.size / 4096 + 1); // lock bitmap pages to avoid corruption
 
     for (int i = 0; i < mem_map_entries; i++) // reserving memory for unusable/acpireclaimmem
     {
