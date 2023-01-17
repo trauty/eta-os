@@ -1,11 +1,6 @@
-#include "io.h"
-#include "gdt/gdt.h"
 #include "kernel_util.h"
-#include "interrupts/idt.h"
-#include "interrupts/interrupts.h"
 
 KernelInfo kernel_info;
-PageTableManager page_table_mgr = NULL;
 
 void prepare_mem(BOOT_INFO* boot_info)
 {
@@ -22,11 +17,11 @@ void prepare_mem(BOOT_INFO* boot_info)
     PageTable* pml4 = (PageTable*)global_allocator.request_page();
     memset(pml4, 0, 4096);
 
-    page_table_mgr = PageTableManager(pml4);
+    global_ptm = PageTableManager(pml4);
 
     for (uint64_t i = 0; i < get_memory_size((EFI_MEMORY_DESCRIPTOR*)boot_info->mem_map, mem_map_entries, boot_info->mem_map_descriptor_size); i += 4096)
     {
-        page_table_mgr.map_mem((void*)i, (void*)i);
+        global_ptm.map_mem((void*)i, (void*)i);
     }
 
     uint64_t frame_buf_base = (uint64_t)boot_info->framebuffer->base_adress;
@@ -36,49 +31,47 @@ void prepare_mem(BOOT_INFO* boot_info)
         
     for (uint64_t i = frame_buf_base; i < frame_buf_base + frame_buf_size; i += 4096)
     {
-        page_table_mgr.map_mem((void*)i, (void*)i);
+        global_ptm.map_mem((void*)i, (void*)i);
     }
 
     asm("mov %0, %%cr3" : : "r" (pml4)); // mmu will now use page tables
 
-    kernel_info.page_table_mgr = &page_table_mgr;
+    kernel_info.page_table_mgr = &global_ptm;
 }
 
 IDTR idtr;
+
+void set_idt_gate(void* handler, uint8_t entry_offset, uint8_t type_attr, uint8_t selector)
+{
+    IDTDescEntry* interrupt = (IDTDescEntry*)(idtr.offset + entry_offset * sizeof(IDTDescEntry));
+    interrupt->set_offset((uint64_t)handler);
+    interrupt->type_attr = type_attr;
+    interrupt->selector = selector;
+}
 
 void prepare_interrupts()
 {
     idtr.limit = 0x0fff;
     idtr.offset = (uint64_t)global_allocator.request_page();
 
-    IDTDescEntry* int_page_fault = (IDTDescEntry*)(idtr.offset + 0xe * sizeof(IDTDescEntry));
-    int_page_fault->set_offset((uint64_t)page_fault_handler);
-    int_page_fault->type_attr = IDT_TA_INTERRUPTGATE;
-    int_page_fault->selector = 0x08;
-
-    IDTDescEntry* int_double_fault = (IDTDescEntry*)(idtr.offset + 0x8 * sizeof(IDTDescEntry));
-    int_double_fault->set_offset((uint64_t)double_fault_handler);
-    int_double_fault->type_attr = IDT_TA_INTERRUPTGATE;
-    int_double_fault->selector = 0x08;
-
-    IDTDescEntry* int_gp_fault = (IDTDescEntry*)(idtr.offset + 0xd * sizeof(IDTDescEntry));
-    int_gp_fault->set_offset((uint64_t)gp_fault_handler);
-    int_gp_fault->type_attr = IDT_TA_INTERRUPTGATE;
-    int_gp_fault->selector = 0x08;
-
-    IDTDescEntry* int_keyboard = (IDTDescEntry*)(idtr.offset + 0x21 * sizeof(IDTDescEntry));
-    int_keyboard->set_offset((uint64_t)keyboard_int_handler);
-    int_keyboard->type_attr = IDT_TA_INTERRUPTGATE;
-    int_keyboard->selector = 0x08;
+    set_idt_gate((void*)page_fault_handler, 0xe, IDT_TA_INTERRUPTGATE, 0x08);
+    set_idt_gate((void*)double_fault_handler, 0x8, IDT_TA_INTERRUPTGATE, 0x08);
+    set_idt_gate((void*)gp_fault_handler, 0xd, IDT_TA_INTERRUPTGATE, 0x08);
+    set_idt_gate((void*)keyboard_int_handler, 0x21, IDT_TA_INTERRUPTGATE, 0x08);
+    set_idt_gate((void*)pit_int_handler, 0x20, IDT_TA_INTERRUPTGATE, 0x08);
 
     asm("lidt %0" : : "m" (idtr)); // moving value into %0 and calling handler
 
     remap_pic();
+}
 
-    outb(PIC1_DATA, 0b11111101); // unmask second bit
-    outb(PIC2_DATA, 0b11111111); // mask all bits of second pic
+void prepare_acpi(BOOT_INFO* boot_info)
+{
+    ACPI::SDTHeader* xsdt = (ACPI::SDTHeader*)(boot_info->rsdp->xsdt_adrr);
 
-    asm("sti"); // to cancel masked interrupts: asm("cli");
+    ACPI::MCFGHeader* mcfg = (ACPI::MCFGHeader*)ACPI::find_table(xsdt, (char*)"MCFG");
+
+    PCI::enumerate_pci(mcfg);
 }
 
 BasicRenderer r = BasicRenderer(NULL, NULL, 0xffffffff);
@@ -97,7 +90,16 @@ KernelInfo init_kernel(BOOT_INFO* boot_info)
 
     memset(boot_info->framebuffer->base_adress, 0, boot_info->framebuffer->buffer_size);
 
+    init_heap((void*)0x0000100000000000, 16);
+    
     prepare_interrupts();
+
+    prepare_acpi(boot_info);
+
+    outb(PIC1_DATA, 0b11111000); // unmasking
+    outb(PIC2_DATA, 0b11101111); // unmasking
+
+    asm("sti"); // set interrupt flag to react to maskable interrupts
 
     return kernel_info;
 }

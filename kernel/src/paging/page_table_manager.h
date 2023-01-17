@@ -9,3 +9,5 @@ public:
     PageTable* pml4_addr;
     void map_mem(void* virt_mem, void* phys_mem);
 };
+
+extern PageTableManager global_ptm;

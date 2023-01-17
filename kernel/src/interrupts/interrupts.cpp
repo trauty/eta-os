@@ -1,35 +1,39 @@
 #include "interrupts.h"
-#include "../panic_screen.h"
-#include "../io.h"
-#include "../input/keyboard.h"
 
-__attribute__((interrupt)) void page_fault_handler(struct InterruptFrame* frame)
+__attribute__((interrupt)) void page_fault_handler(InterruptFrame* frame)
 {
     panic("PAGE FAULT DETECTED");
 
     while (true);
 }
 
-__attribute__((interrupt)) void double_fault_handler(struct InterruptFrame* frame)
+__attribute__((interrupt)) void double_fault_handler(InterruptFrame* frame)
 {
     panic("DOUBLE FAULT DETECTED");
     
     while (true);
 }
 
-__attribute__((interrupt)) void gp_fault_handler(struct InterruptFrame* frame)
+__attribute__((interrupt)) void gp_fault_handler(InterruptFrame* frame)
 {
     panic("GENERAL PROTECTION FAULT DETECTED");
     
     while (true);
 }
 
-__attribute__((interrupt)) void keyboard_int_handler(struct InterruptFrame* frame)
+__attribute__((interrupt)) void keyboard_int_handler(InterruptFrame* frame)
 {
     uint8_t scancode = inb(0x60);
 
     handle_keyboard(scancode);
 
+    pic_end_master();
+}
+
+__attribute__((interrupt)) void pit_int_handler(InterruptFrame* frame)
+{
+    PIT::tick();
+    
     pic_end_master();
 }
 

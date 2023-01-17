@@ -38,16 +38,20 @@ void PageFrameAllocator::read_efi_memory_map(EFI_MEMORY_DESCRIPTOR* mem_map, siz
 
     init_bitmap(bitmap_size, largest_free_mem_seg);
 
-    lock_pages(page_bitmap.buffer, page_bitmap.size / 4096 + 1); // lock bitmap pages to avoid corruption
+    reserve_pages(0, mem_size / 4096 + 1);
 
     for (int i = 0; i < mem_map_entries; i++) // reserving memory for unusable/acpireclaimmem
     {
         EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)((uint64_t)mem_map + (i * mem_map_desc_size));
-        if (desc->type != 7) // not EfiConeventionalMemory
+        if (desc->type == 7) // EfiConeventionalMemory
         {
-            reserve_pages(desc->phys_addr, desc->num_pages);
+            unreserve_pages(desc->phys_addr, desc->num_pages);
         }
     }
+
+    reserve_pages(0, 0x100); // reserve bios memory
+
+    lock_pages(page_bitmap.buffer, page_bitmap.size / 4096 + 1); // lock bitmap pages to avoid corruption
 }
 
 void PageFrameAllocator::init_bitmap(size_t bitmap_size, void* buffer_addr)

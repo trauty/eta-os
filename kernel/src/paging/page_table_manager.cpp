@@ -5,6 +5,8 @@
 #include "page_table_manager.h"
 #include "page_frame_allocator.h"
 
+PageTableManager global_ptm = NULL;
+
 PageTableManager::PageTableManager(PageTable* pml4_addr)
 {
     this->pml4_addr = pml4_addr;
